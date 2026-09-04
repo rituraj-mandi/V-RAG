@@ -1,3 +1,0 @@
-1. .\venv\Scripts\Activate.ps1                  
-2. python offline_indexer.py 
-3. uvicorn server:app --host 0.0.0.0 --port 8000
