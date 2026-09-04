@@ -8,13 +8,13 @@
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
   
   :root {
-    --bg: #FFFFFF;
-    --ink: #17181A;
-    --border: #ECECEE;
-    --panel: #FAFAFB;
-    --primary: #1B1C1F;
-    --primary-text: #F3F3F4;
-    --danger: #E5484D;
+    --bg: #09090b;
+    --ink: #fafafa;
+    --border: #27272a;
+    --panel: #18181b;
+    --primary: #fafafa;
+    --primary-text: #09090b;
+    --danger: #ef4444;
   }
   
   * { box-sizing: border-box; }
@@ -122,12 +122,12 @@
   }
   .drop-box.drag-over {
     border-color: var(--ink);
-    background: #f0f0f1;
+    background: #27272a;
   }
   .drop-box p {
     margin: 0;
     font-weight: 500;
-    color: #666;
+    color: #a1a1aa;
     font-size: 0.9rem;
   }
   
@@ -146,11 +146,11 @@
   .btn:hover { opacity: 0.9; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-upload {
-    background: #fff;
+    background: transparent;
     color: var(--ink);
     border: 1px solid var(--border);
   }
-  .btn-upload:hover { background: var(--panel); }
+  .btn-upload:hover { background: #27272a; }
   
   .start-btn {
     font-size: 1.2rem;
@@ -158,32 +158,47 @@
   }
   .start-btn.active {
     background: var(--danger);
+    color: #fff;
   }
   
   #fileInput { display: none; }
   
   .status {
     font-size: 0.9rem;
-    color: #666;
+    color: #a1a1aa;
     height: 20px;
   }
   
-  .orb {
-    width: 240px;
-    height: 240px;
+  .assistant-orb {
+    width: 200px;
+    height: 200px;
     border-radius: 50%;
-    object-fit: contain;
     margin-bottom: 20px;
-    transition: all 0.3s ease;
+    background: radial-gradient(circle at 30% 30%, #5ce1e6, #8c52ff 50%, #ff61d8);
+    box-shadow: 
+      inset -10px -10px 20px rgba(0,0,0,0.1),
+      0 0 20px rgba(140, 82, 255, 0.4),
+      0 0 40px rgba(92, 225, 230, 0.4);
+    animation: orbFloat 4s ease-in-out infinite;
+    transition: all 0.3s;
   }
   
-  .orb.moving {
-    animation: pulse 1.5s infinite alternate ease-in-out;
+  .assistant-orb.moving {
+    animation: orbActive 0.8s alternate infinite ease-in-out;
+    box-shadow: 
+      inset -10px -10px 20px rgba(0,0,0,0.1),
+      0 0 40px rgba(140, 82, 255, 0.8),
+      0 0 80px rgba(92, 225, 230, 0.8);
   }
   
-  @keyframes pulse {
-    0% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(150, 200, 255, 0.4)); }
-    100% { transform: scale(1.15); filter: drop-shadow(0 0 35px rgba(150, 200, 255, 0.8)); }
+  @keyframes orbFloat {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-10px) scale(1.02); }
+  }
+  
+  @keyframes orbActive {
+    0% { transform: scale(1); filter: hue-rotate(0deg); }
+    100% { transform: scale(1); filter: hue-rotate(30deg); }
   }
 </style>
 </head>
@@ -208,7 +223,7 @@
   </div>
   
   <div class="main-area">
-    <img src="orb.jpg" alt="AI Orb" class="orb" id="orb">
+    <div class="assistant-orb" id="orb"></div>
     <button class="btn start-btn" id="startBtn">Start Conversation</button>
     <div class="status" id="statusText">Ready</div>
   </div>
