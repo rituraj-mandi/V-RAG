@@ -231,10 +231,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         if 'bytes' in data:
                             msg = {
                                 "realtimeInput": {
-                                    "mediaChunks": [{
+                                    "audio": {
                                         "mimeType": "audio/pcm;rate=16000", 
                                         "data": base64.b64encode(data['bytes']).decode()
-                                    }]
+                                    }
                                 }
                             }
                             await gemini_ws.send(json.dumps(msg))

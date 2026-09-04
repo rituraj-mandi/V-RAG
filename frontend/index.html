@@ -28,12 +28,50 @@
   }
   
   .side-panel {
-    width: 280px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 300px;
     background: var(--panel);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
     padding: 20px;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 10;
+  }
+  .side-panel.open {
+    transform: translateX(0);
+  }
+  .overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 9;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .burger-btn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    z-index: 5;
+    padding: 8px;
+  }
+  .burger-btn svg {
+    width: 28px;
+    height: 28px;
+    fill: var(--ink);
   }
   .side-panel h2 {
     margin: 0 0 16px 0;
@@ -150,8 +188,13 @@
 </style>
 </head>
 <body>
+  <div class="overlay" id="overlay"></div>
+  
+  <button class="burger-btn" id="burgerBtn">
+    <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+  </button>
 
-  <div class="side-panel">
+  <div class="side-panel" id="sidePanel">
     <div class="drop-box" id="dropBox">
       <p style="font-size:0.85rem">Drop documents here<br>(.txt, .pdf, .docx, .pptx, images)</p>
       <button class="btn btn-upload" id="uploadBtn">Browse Files</button>
@@ -178,6 +221,17 @@
     const docList = document.getElementById('docList');
     const startBtn = document.getElementById('startBtn');
     const statusText = document.getElementById('statusText');
+    const burgerBtn = document.getElementById('burgerBtn');
+    const sidePanel = document.getElementById('sidePanel');
+    const overlay = document.getElementById('overlay');
+    
+    // Burger Menu Logic
+    const toggleMenu = () => {
+      sidePanel.classList.toggle('open');
+      overlay.classList.toggle('open');
+    };
+    burgerBtn.addEventListener('click', toggleMenu);
+    overlay.addEventListener('click', toggleMenu);
     
     // Upload logic
     const handleFiles = async (files) => {
