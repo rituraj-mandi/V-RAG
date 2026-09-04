@@ -174,6 +174,13 @@ async def upload_doc(file: UploadFile = File(...)):
     rag.add_document(text, doc_id, file.filename)
     return {"status": "success", "doc_id": doc_id, "title": file.filename}
 
+@app.get("/api/documents")
+async def get_documents():
+    if rag:
+        docs = rag.get_all_documents()
+        return {"status": "success", "documents": docs}
+    return {"status": "error", "message": "RAG pipeline not initialized"}
+
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()

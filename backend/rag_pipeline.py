@@ -248,9 +248,35 @@ Answer:"""
                     "dense": dense_vec,
                     "sparse": sparse_vec
                 },
-                payload={"text": chunk, "doc_id": doc_id, "title": title}
+                payload={
+                    "text": chunk,
+                    "doc_id": doc_id,
+                    "title": title
+                }
             )
             points.append(point)
             
-        self.client.upsert(collection_name=self.collection_name, points=points)
-        print(f"Indexed document {doc_id} with {len(points)} chunks.")
+        self.client.upsert(
+            collection_name=self.collection_name,
+            points=points
+        )
+        print(f"Indexed document {doc_id} with {len(chunks)} chunks.")
+
+    def get_all_documents(self):
+        try:
+            records, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                limit=1000,
+                with_payload=True,
+                with_vectors=False
+            )
+            docs = {}
+            for r in records:
+                doc_id = r.payload.get("doc_id")
+                title = r.payload.get("title", "Unknown Document")
+                if doc_id and doc_id not in docs:
+                    docs[doc_id] = title
+            return [{"doc_id": k, "title": v} for k, v in docs.items()]
+        except Exception as e:
+            print(f"Error fetching documents: {e}")
+            return []

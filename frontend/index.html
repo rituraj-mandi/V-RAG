@@ -212,6 +212,28 @@
       }
     };
     
+    // Fetch initial docs
+    const fetchDocuments = async () => {
+      try {
+        const res = await fetch('/api/documents');
+        const data = await res.json();
+        if (data.status === 'success') {
+          docList.innerHTML = '';
+          data.documents.forEach(doc => {
+            const docEl = document.createElement('div');
+            docEl.className = 'doc-item';
+            docEl.textContent = doc.title;
+            docList.appendChild(docEl);
+          });
+        }
+      } catch (e) {
+        console.error("Failed to load documents:", e);
+      }
+    };
+    
+    // Call it when page loads
+    window.addEventListener('DOMContentLoaded', fetchDocuments);
+    
     // Drag & Drop
     dropBox.addEventListener('dragover', (e) => { e.preventDefault(); dropBox.classList.add('drag-over'); });
     dropBox.addEventListener('dragleave', () => dropBox.classList.remove('drag-over'));
