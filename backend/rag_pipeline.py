@@ -16,6 +16,15 @@ class RAGPipeline:
         self.client = QdrantClient(path=qdrant_path)
         self.collection_name = collection_name
         
+        # Ensure collection exists
+        from qdrant_client.models import VectorParams, Distance, SparseVectorParams, SparseIndexParams
+        if not self.client.collection_exists(self.collection_name):
+            self.client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config={"dense": VectorParams(size=384, distance=Distance.COSINE)},
+                sparse_vectors_config={"sparse": SparseVectorParams(index=SparseIndexParams(on_disk=False))}
+            )
+        
         # Load embedding models for query
         self.dense_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
         self.sparse_model = SparseTextEmbedding(model_name="Qdrant/bm25")
@@ -173,3 +182,75 @@ Answer:"""
         res['metrics']['stt_ms'] = stt_ms
         res['metrics']['total_ms'] += stt_ms
         return res
+
+    def add_document(self, text: str, doc_id: str, title: str = ""):
+        import uuid
+        import nltk
+        from qdrant_client.models import PointStruct, SparseVector
+        
+        try:
+            nltk.data.find('tokenizers/punkt')
+        except LookupError:
+            nltk.download('punkt')
+            nltk.download('punkt_tab')
+            
+        chunks = []
+        
+        # 1. Semantic Chunking
+        sentences = nltk.sent_tokenize(text)
+        current_chunk = []
+        current_length = 0
+        max_words = 100
+        
+        for sentence in sentences:
+            words_count = len(sentence.split())
+            if current_length + words_count > max_words and current_chunk:
+                chunks.append(" ".join(current_chunk))
+                current_chunk = []
+                current_length = 0
+            current_chunk.append(sentence)
+            current_length += words_count
+            
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
+            
+        # 2. Sliding Window Chunking
+        words = text.split()
+        window_size = 150
+        overlap = 30
+        
+        if len(words) <= window_size:
+            chunks.append(text)
+        else:
+            i = 0
+            while i < len(words):
+                chunk = " ".join(words[i:i+window_size])
+                chunks.append(chunk)
+                i += (window_size - overlap)
+                
+        # Deduplicate and clean
+        chunks = list(set([c.strip() for c in chunks if c.strip()]))
+                
+        dense_embeds = list(self.dense_model.embed(chunks))
+        sparse_embeds = list(self.sparse_model.embed(chunks))
+        
+        points = []
+        for j, chunk in enumerate(chunks):
+            dense_vec = dense_embeds[j].tolist()
+            sparse_vec = SparseVector(
+                indices=sparse_embeds[j].indices.tolist(),
+                values=sparse_embeds[j].values.tolist()
+            )
+            
+            point = PointStruct(
+                id=str(uuid.uuid4()),
+                vector={
+                    "dense": dense_vec,
+                    "sparse": sparse_vec
+                },
+                payload={"text": chunk, "doc_id": doc_id, "title": title}
+            )
+            points.append(point)
+            
+        self.client.upsert(collection_name=self.collection_name, points=points)
+        print(f"Indexed document {doc_id} with {len(points)} chunks.")

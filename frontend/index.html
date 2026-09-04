@@ -1,835 +1,337 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>What's your question?</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice RAG</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-
-:root{
-  --bg:#FFFFFF;
-  --ink:#17181A;
-  --ink-dim:#8C8D91;
-  --ink-faint:#B9BABE;
-  --pill-bg:#1B1C1F;
-  --pill-text:#F3F3F4;
-  --placeholder:#9497A0;
-  --border:#ECECEE;
-  --panel:#FAFAFB;
-  --orange:#FF8A34;
-  --pink:#FF2E88;
-  --danger:#E5484D;
-}
-*{box-sizing:border-box;}
-html,body{margin:0;padding:0;height:100%;}
-body{
-  background:var(--bg);
-  color:var(--ink);
-  font-family:'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
-  -webkit-font-smoothing:antialiased;
-  overflow:hidden;
-}
-
-.app{
-  position:relative;
-  height:100vh;
-  width:100vw;
-  display:flex;
-  flex-direction:column;
-}
-
-/* ---------- corner controls ---------- */
-.corner-controls{
-  position:absolute;
-  top:18px; right:20px;
-  display:flex;
-  gap:8px;
-  z-index:20;
-}
-.icon-btn-sm{
-  width:38px; height:38px;
-  border-radius:50%;
-  border:1.5px solid var(--border);
-  background:var(--bg);
-  color:var(--ink-dim);
-  display:flex; align-items:center; justify-content:center;
-  cursor:pointer;
-  transition:border-color .15s, color .15s, background .15s;
-}
-.icon-btn-sm:hover{border-color:var(--ink-faint); color:var(--ink);}
-.icon-btn-sm.active{background:var(--ink); color:#fff; border-color:var(--ink);}
-
-/* ---------- stage (hero / chat) ---------- */
-.stage{
-  flex:1;
-  min-height:0;
-  display:flex;
-  flex-direction:column;
-  padding:0 24px;
-}
-
-/* empty / hero state */
-.stage.state-empty{
-  align-items:center;
-  justify-content:center;
-}
-.stage.state-empty .hero-block{
-  width:100%;
-  max-width:640px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  gap:22px;
-}
-
-.greeting{
-  font-size:2.1rem;
-  font-weight:600;
-  text-align:center;
-  line-height:1.25;
-  margin:0;
-  letter-spacing:-0.01em;
-}
-.greeting .dim{color:var(--ink-dim); font-weight:500;}
-
-/* chat state */
-.stage.state-chat{
-  align-items:stretch;
-  justify-content:flex-start;
-}
-.chat-scroll{
-  flex:1;
-  min-height:0;
-  overflow-y:auto;
-  padding:80px 0 18px 0;
-  display:flex;
-  flex-direction:column;
-  gap:16px;
-  max-width:720px;
-  width:100%;
-  margin:0 auto;
-}
-.msg{max-width:80%; display:flex; flex-direction:column; gap:6px;}
-.msg.user{align-self:flex-end; align-items:flex-end;}
-.msg.assistant{align-self:flex-start; align-items:flex-start;}
-.bubble{
-  padding:12px 16px;
-  border-radius:18px;
-  font-size:0.95rem;
-  line-height:1.5;
-}
-.msg.user .bubble{
-  background:var(--pill-bg);
-  color:var(--pill-text);
-  border-bottom-right-radius:5px;
-}
-.msg.assistant .bubble{
-  background:var(--panel);
-  border:1px solid var(--border);
-  color:var(--ink);
-  border-bottom-left-radius:5px;
-}
-.msg.assistant .bubble.pending{color:var(--ink-dim); font-style:italic;}
-.msg.assistant .bubble.error{border-color:var(--danger); color:#B5303A;}
-
-.sources-toggle{
-  font-size:0.72rem;
-  color:var(--ink-dim);
-  background:none;
-  border:none;
-  cursor:pointer;
-  padding:0 4px;
-  text-decoration:underline;
-  text-underline-offset:2px;
-}
-.sources-panel{
-  margin-top:4px;
-  padding:10px 12px;
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:10px;
-  max-width:420px;
-}
-.sources-panel .src-item{margin-bottom:8px;}
-.sources-panel .src-item:last-child{margin-bottom:0;}
-.sources-panel .src-title{
-  font-size:0.7rem; font-weight:600; color:var(--ink-dim);
-  text-transform:uppercase; letter-spacing:0.04em; margin-bottom:2px;
-}
-.sources-panel .src-text{font-size:0.78rem; color:var(--ink); line-height:1.4;}
-
-/* ---------- input pill ---------- */
-.input-wrap{
-  width:100%;
-  max-width:640px;
-  margin:0 auto;
-  padding-bottom:14px;
-}
-.stage.state-empty .input-wrap{padding-bottom:0;}
-.pill{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  background:var(--pill-bg);
-  border-radius:999px;
-  padding:6px 6px 6px 20px;
-}
-.pill textarea{
-  flex:1;
-  background:none;
-  border:none;
-  outline:none;
-  resize:none;
-  color:var(--pill-text);
-  font-family:inherit;
-  font-size:1rem;
-  line-height:1.4;
-  max-height:110px;
-  min-height:24px;
-  padding:8px 0;
-}
-.pill textarea::placeholder{color:var(--placeholder);}
-.send-btn{
-  width:40px; height:40px;
-  border-radius:50%;
-  border:1.5px solid rgba(255,255,255,0.55);
-  background:transparent;
-  color:#fff;
-  display:flex; align-items:center; justify-content:center;
-  cursor:pointer;
-  flex-shrink:0;
-  transition:background .15s;
-}
-.send-btn:hover{background:rgba(255,255,255,0.1);}
-.send-btn:disabled{opacity:0.35; cursor:not-allowed;}
-
-.mic-hint{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  cursor:pointer;
-  color:var(--ink-dim);
-  font-size:0.85rem;
-  user-select:none;
-}
-.mic-hint svg{color:var(--ink); flex-shrink:0;}
-.mic-hint:hover{color:var(--ink);}
-
-/* ---------- listening overlay ---------- */
-.listening-view{
-  position:fixed;
-  inset:0;
-  background:var(--bg);
-  z-index:30;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  gap:20px;
-  padding:24px;
-}
-.listening-view[hidden]{display:none;}
-canvas#scope{
-  width:100%;
-  max-width:760px;
-  height:170px;
-  display:block;
-}
-.listening-caption{
-  font-size:1.25rem;
-  color:var(--ink-dim);
-  font-weight:500;
-}
-.live-pill{
-  background:var(--pill-bg);
-  color:var(--pill-text);
-  border-radius:999px;
-  padding:14px 22px;
-  font-size:1rem;
-  max-width:640px;
-  width:100%;
-  text-align:left;
-  min-height:22px;
-}
-.live-pill.placeholder{color:var(--placeholder);}
-.stop-hint{
-  font-size:0.78rem;
-  color: #dc2626;
-  font-weight: 500;
-}
-
-/* ---------- archive drawer ---------- */
-.drawer-backdrop{
-  position:fixed; inset:0;
-  background:rgba(20,20,22,0.25);
-  z-index:39;
-}
-.drawer-backdrop[hidden]{display:none;}
-.drawer{
-  position:fixed;
-  top:0; right:0; bottom:0;
-  width:340px;
-  max-width:88vw;
-  background:#fff;
-  border-left:1px solid var(--border);
-  z-index:40;
-  padding:22px 20px;
-  overflow-y:auto;
-  transform:translateX(0);
-}
-.drawer[hidden]{display:none;}
-.drawer h2{
-  font-size:1rem;
-  font-weight:600;
-  margin:0 0 4px 0;
-}
-.drawer .drawer-sub{
-  font-size:0.78rem;
-  color:var(--ink-dim);
-  margin:0 0 18px 0;
-}
-.doc-card{
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:10px;
-  padding:12px 13px;
-  margin-bottom:10px;
-  position:relative;
-}
-.doc-card h3{font-size:0.85rem; margin:0 0 4px 0; padding-right:20px; font-weight:600;}
-.doc-card p{font-size:0.75rem; line-height:1.4; margin:0; color:var(--ink-dim);}
-.doc-card .remove{
-  position:absolute; top:10px; right:10px;
-  background:none; border:none; color:var(--ink-faint);
-  cursor:pointer; font-size:0.85rem;
-}
-.doc-card .remove:hover{color:var(--danger);}
-.add-doc{margin-top:16px; padding-top:16px; border-top:1px solid var(--border);}
-.add-doc input, .add-doc textarea{
-  width:100%;
-  background:#fff;
-  border:1px solid var(--border);
-  border-radius:8px;
-  padding:8px 10px;
-  font-family:inherit;
-  font-size:0.82rem;
-  margin-bottom:8px;
-  color:var(--ink);
-  resize:vertical;
-}
-.add-doc textarea{min-height:70px;}
-.add-doc input:focus, .add-doc textarea:focus{outline:none; border-color:var(--ink-faint);}
-.btn-primary{
-  width:100%;
-  background:var(--ink);
-  border:none;
-  color:#fff;
-  font-size:0.82rem;
-  font-weight:600;
-  padding:10px;
-  border-radius:8px;
-  cursor:pointer;
-}
-.btn-primary:hover{opacity:0.88;}
-.drawer-note{
-  margin-top:16px; padding-top:14px; border-top:1px solid var(--border);
-  font-size:0.7rem; color:var(--ink-faint); line-height:1.6;
-}
-
-::-webkit-scrollbar{width:8px;}
-::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
-::-webkit-scrollbar-track{background:transparent;}
-
-@media (max-width:640px){
-  .greeting{font-size:1.7rem; text-align:left;}
-  .stage.state-empty{align-items:stretch; justify-content:flex-start; padding-top:64px;}
-  .stage.state-empty .hero-block{max-width:none; align-items:stretch; gap:14px; height:100%;}
-  .stage.state-empty .greeting{text-align:left;}
-  .stage.state-empty .mic-hint{justify-content:flex-start;}
-  .stage.state-empty .input-wrap{margin-top:auto; max-width:none;}
-  .chat-scroll{padding-top:70px;}
-}
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+  
+  :root {
+    --bg: #FFFFFF;
+    --ink: #17181A;
+    --border: #ECECEE;
+    --panel: #FAFAFB;
+    --primary: #1B1C1F;
+    --primary-text: #F3F3F4;
+    --danger: #E5484D;
+  }
+  
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    color: var(--ink);
+  }
+  
+  .side-panel {
+    width: 280px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+  }
+  .side-panel h2 {
+    margin: 0 0 16px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+  .doc-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .doc-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    word-break: break-all;
+  }
+  
+  .main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    background: var(--bg);
+    gap: 24px;
+  }
+  
+  .drop-box {
+    width: 100%;
+    padding: 24px 16px;
+    margin-bottom: 24px;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel);
+    transition: all 0.2s;
+    gap: 12px;
+    text-align: center;
+  }
+  .drop-box.drag-over {
+    border-color: var(--ink);
+    background: #f0f0f1;
+  }
+  .drop-box p {
+    margin: 0;
+    font-weight: 500;
+    color: #666;
+    font-size: 0.9rem;
+  }
+  
+  .btn {
+    background: var(--primary);
+    color: var(--primary-text);
+    border: none;
+    padding: 12px 24px;
+    border-radius: 99px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    font-family: inherit;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-upload {
+    background: #fff;
+    color: var(--ink);
+    border: 1px solid var(--border);
+  }
+  .btn-upload:hover { background: var(--panel); }
+  
+  .start-btn {
+    font-size: 1.2rem;
+    padding: 16px 48px;
+  }
+  .start-btn.active {
+    background: var(--danger);
+  }
+  
+  #fileInput { display: none; }
+  
+  .status {
+    font-size: 0.9rem;
+    color: #666;
+    height: 20px;
+  }
+  
+  .orb {
+    width: 240px;
+    height: 240px;
+    border-radius: 50%;
+    object-fit: contain;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+  }
+  
+  .orb.moving {
+    animation: pulse 1.5s infinite alternate ease-in-out;
+  }
+  
+  @keyframes pulse {
+    0% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(150, 200, 255, 0.4)); }
+    100% { transform: scale(1.15); filter: drop-shadow(0 0 35px rgba(150, 200, 255, 0.8)); }
+  }
 </style>
 </head>
 <body>
 
-<div class="app">
-
-  <div class="corner-controls">
-    <button class="icon-btn-sm active" id="speakToggle" title="Toggle spoken replies">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-    </button>
-    <button class="icon-btn-sm" id="archiveToggle" title="Manage the archive">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-    </button>
-  </div>
-
-  <!-- HERO / CHAT STAGE -->
-  <div class="stage state-empty" id="stage">
-    <div class="hero-block" id="heroBlock">
-      <h1 class="greeting" id="greeting">Hello there, <span class="dim">what's your question?</span></h1>
-
-      <div class="input-wrap" id="inputWrapHero">
-        <div class="pill">
-          <textarea id="queryInput" placeholder="Type here" rows="1"></textarea>
-          <button class="send-btn" id="sendBtn" title="Send">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          </button>
-        </div>
-      </div>
-
-      <div class="mic-hint" id="micHint">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2h-2v2a9 9 0 0 0 8 8.94V23h-3v2h8v-2h-3v-2.06A9 9 0 0 0 21 12v-2h-2z"/></svg>
-        <span id="micHintText">Press Ctrl+Space for Voice mode</span>
-      </div>
+  <div class="side-panel">
+    <div class="drop-box" id="dropBox">
+      <p style="font-size:0.85rem">Drop documents here<br>(.txt, .pdf, .docx, .pptx, images)</p>
+      <button class="btn btn-upload" id="uploadBtn">Browse Files</button>
+      <input type="file" id="fileInput" accept=".txt,.pdf,.docx,.pptx,.png,.jpg,.jpeg">
     </div>
-
-    <div class="chat-scroll" id="chatScroll" hidden></div>
-  </div>
-
-  <!-- INPUT BAR FOR CHAT STATE -->
-  <div class="input-wrap" id="inputWrapChat" hidden style="padding:0 24px 16px 24px; max-width:none;">
-    <div style="max-width:720px; margin:0 auto;">
-      <div class="pill" id="pillChat">
-        <textarea id="queryInputChat" placeholder="Type here" rows="1"></textarea>
-        <button class="send-btn" id="sendBtnChat" title="Send">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        </button>
-      </div>
+    
+    <h2>Saved Documents</h2>
+    <div class="doc-list" id="docList">
+      <!-- Docs go here -->
     </div>
   </div>
-
-  <!-- LISTENING OVERLAY -->
-  <div class="listening-view" id="listeningView" hidden>
-    <canvas id="scope" width="760" height="170"></canvas>
-    <div class="listening-caption">Listening…</div>
-    <div class="live-pill placeholder" id="livePill">Say your question…</div>
-    <div class="stop-hint">Tap anywhere, or press Ctrl+Space, to stop</div>
+  
+  <div class="main-area">
+    <img src="orb.jpg" alt="AI Orb" class="orb" id="orb">
+    <button class="btn start-btn" id="startBtn">Start Conversation</button>
+    <div class="status" id="statusText">Ready</div>
   </div>
 
-  <!-- ARCHIVE DRAWER -->
-  <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
-  <div class="drawer" id="drawer" hidden>
-    <h2>The Archive</h2>
-    <p class="drawer-sub" id="docCount"></p>
-    <div id="docList"></div>
-    <div class="add-doc">
-      <p class="drawer-sub" style="margin-bottom:8px;">Add a document</p>
-      <input type="text" id="newDocTitle" placeholder="Title" />
-      <textarea id="newDocBody" placeholder="Paste the text to index…"></textarea>
-      <button class="btn-primary" id="addDocBtn">Add to archive</button>
-    </div>
-    <div class="drawer-note">
-      Retrieval runs locally in your browser using keyword scoring over these documents — swap it for a real embeddings index when you wire this up to production.
-    </div>
-  </div>
-
-</div>
-
-<script>
-(function(){
-
-  /* ============================================================
-     STATE
-     ============================================================ */
-  const STOPWORDS = new Set(['the','a','an','is','are','was','were','in','on','at','to','for','of','and','or',
-    'how','what','do','i','my','can','does','it','this','that','be','with','you','your','if','so','me','please',
-    'about','from','have','has','will','would','could','should','not','get','got']);
-
-  let docs = [
-    { id:'shipping', title:'Shipping & Delivery', text:`Orders placed before 2pm ET ship the same business day. Standard shipping within the continental US takes 3-5 business days and is free on orders over $35; otherwise it costs $5.95. Express shipping takes 1-2 business days for $14.95. We currently ship only within the United States and Canada. Once your order ships you'll receive a tracking link by email. If a package shows as delivered but hasn't arrived, wait 24 hours before contacting support, since carriers sometimes mark packages early.` },
-    { id:'subscription', title:'Subscription & Billing', text:`Coffee subscriptions bill every 2 or 4 weeks depending on the plan you choose at signup. You can pause, skip a delivery, or change your frequency anytime from the account page, and changes take effect on the next billing cycle, not the current one. Cancelling a subscription takes effect immediately and there is no cancellation fee. Refunds for a subscription charge are only available if the request is made within 48 hours of the charge and before the order has shipped. Gift subscriptions are prepaid and do not auto-renew.` },
-    { id:'brewing', title:'Brewing Guide', text:`For drip coffee, use a ratio of 1 gram of coffee to 16 grams of water, ground medium. For pour-over, grind slightly finer and use water just off the boil, around 200°F. For French press, use a coarse grind and steep for 4 minutes before pressing slowly. Whole beans stay fresh for about 3 weeks after roasting if kept in an airtight container away from light; ground coffee is best used within a week. We recommend grinding beans just before brewing whenever possible.` },
-    { id:'returns', title:'Returns & Quality Issues', text:`If a bag arrives damaged or you're unhappy with the roast, contact support within 30 days of delivery for a replacement or refund, no questions asked. We don't require the bag to be returned for quality issues. Because coffee is perishable, we don't accept returns for buyer's remorse on opened bags, but unopened bags can be returned within 14 days for a refund minus shipping.` },
-    { id:'sourcing', title:'Sourcing & Roasting', text:`All beans are sourced directly from small farms in Ethiopia, Colombia, and Guatemala, with relationships that go back at least five years with each cooperative. Roasting happens in small batches of under 20kg to keep quality consistent, and every batch is cupped and scored before it's approved for sale. Roast dates are printed on every bag, and we recommend drinking coffee within 2-6 weeks of that date for the best flavor.` }
-  ];
-
-  let messages = []; // {role, content, pending, error, chunks}
-  let speakEnabled = true;
-  let isListening = false;
-  let audioCtx = null, analyser = null, micStream = null, recognition = null, mediaRecorder = null, audioChunks = [];
-  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-
-  /* ============================================================
-     RETRIEVAL
-     ============================================================ */
-  function tokenize(str){ return (str.toLowerCase().match(/[a-z0-9']+/g) || []); }
-
-  function chunkDoc(doc){
-    const sentences = doc.text.match(/[^.!?]+[.!?]+/g) || [doc.text];
-    const chunks = []; let buf = '';
-    sentences.forEach(s => { buf += s; if (buf.length > 220){ chunks.push(buf.trim()); buf=''; } });
-    if (buf.trim()) chunks.push(buf.trim());
-    return chunks.map(text => ({ docId: doc.id, docTitle: doc.title, text }));
-  }
-  function getAllChunks(){ return docs.flatMap(chunkDoc); }
-
-  function retrieve(query, k){
-    const qTokens = tokenize(query).filter(t => !STOPWORDS.has(t));
-    if (qTokens.length === 0) return [];
-    const scored = getAllChunks().map(chunk => {
-      const cTokens = tokenize(chunk.text);
-      const freq = {};
-      cTokens.forEach(t => freq[t] = (freq[t]||0)+1);
-      let raw = 0;
-      qTokens.forEach(t => { if (freq[t]) raw += freq[t]; });
-      return { ...chunk, score: raw / Math.sqrt(cTokens.length || 1) };
-    }).filter(c => c.score > 0);
-    scored.sort((a,b) => b.score - a.score);
-    return scored.slice(0, k || 4);
-  }
-
-  function escapeHtml(str){ const d=document.createElement('div'); d.textContent=str; return d.innerHTML; }
-
-  /* ============================================================
-     ARCHIVE DRAWER
-     ============================================================ */
-  const drawer = document.getElementById('drawer');
-  const drawerBackdrop = document.getElementById('drawerBackdrop');
-  document.getElementById('archiveToggle').addEventListener('click', () => {
-    drawer.hidden = false; drawerBackdrop.hidden = false;
-  });
-  drawerBackdrop.addEventListener('click', () => { drawer.hidden = true; drawerBackdrop.hidden = true; });
-
-  function renderDocs(){
-    const list = document.getElementById('docList');
-    list.innerHTML = '';
-    docs.forEach(doc => {
-      const card = document.createElement('div');
-      card.className = 'doc-card';
-      const snippet = doc.text.length > 100 ? doc.text.slice(0,100) + '…' : doc.text;
-      card.innerHTML = `<button class="remove" data-id="${doc.id}">✕</button><h3>${escapeHtml(doc.title)}</h3><p>${escapeHtml(snippet)}</p>`;
-      list.appendChild(card);
-    });
-    document.getElementById('docCount').textContent = `${docs.length} document${docs.length===1?'':'s'} · ${getAllChunks().length} chunks indexed`;
-    list.querySelectorAll('.remove').forEach(btn => {
-      btn.addEventListener('click', () => { docs = docs.filter(d => d.id !== btn.dataset.id); renderDocs(); });
-    });
-  }
-  document.getElementById('addDocBtn').addEventListener('click', () => {
-    const titleEl = document.getElementById('newDocTitle');
-    const bodyEl = document.getElementById('newDocBody');
-    const title = titleEl.value.trim(), text = bodyEl.value.trim();
-    if (!title || !text) return;
-    docs.push({ id:'doc-'+Date.now(), title, text });
-    titleEl.value=''; bodyEl.value='';
-    renderDocs();
-  });
-  renderDocs();
-
-  /* ============================================================
-     STAGE SWITCHING (hero <-> chat)
-     ============================================================ */
-  const stage = document.getElementById('stage');
-  const heroBlock = document.getElementById('heroBlock');
-  const chatScroll = document.getElementById('chatScroll');
-  const inputWrapHero = document.getElementById('inputWrapHero');
-  const inputWrapChat = document.getElementById('inputWrapChat');
-
-  function setStageState(){
-    const hasMessages = messages.length > 0;
-    stage.classList.toggle('state-empty', !hasMessages);
-    stage.classList.toggle('state-chat', hasMessages);
-    heroBlock.hidden = hasMessages;
-    chatScroll.hidden = !hasMessages;
-    inputWrapHero.parentElement.contains(inputWrapHero); // no-op guard
-    inputWrapHero.style.display = hasMessages ? 'none' : '';
-    inputWrapChat.hidden = !hasMessages;
-  }
-
-  function renderChat(){
-    setStageState();
-    if (messages.length === 0) return;
-    chatScroll.innerHTML = '';
-    messages.forEach((m, idx) => {
-      const wrap = document.createElement('div');
-      wrap.className = 'msg ' + m.role;
-      const bubbleClass = 'bubble' + (m.error ? ' error' : '') + (m.pending ? ' pending' : '');
-      wrap.innerHTML = `<div class="bubble ${bubbleClass}">${escapeHtml(m.content)}</div>`;
-      if (m.role === 'assistant' && m.chunks && m.chunks.length){
-        const toggle = document.createElement('button');
-        toggle.className = 'sources-toggle';
-        toggle.textContent = `Sources (${m.chunks.length})`;
-        const panel = document.createElement('div');
-        panel.className = 'sources-panel';
-        panel.style.display = 'none';
-        panel.innerHTML = m.chunks.map((c,i) => `
-          <div class="src-item">
-            <div class="src-title">[${i+1}] ${escapeHtml(c.docTitle)} · ${c.score.toFixed(2)}</div>
-            <div class="src-text">${escapeHtml(c.text.length > 160 ? c.text.slice(0,160)+'…' : c.text)}</div>
-          </div>`).join('');
-        toggle.addEventListener('click', () => { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; });
-        wrap.appendChild(toggle);
-        wrap.appendChild(panel);
+  <script>
+    // Elements
+    const dropBox = document.getElementById('dropBox');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const fileInput = document.getElementById('fileInput');
+    const docList = document.getElementById('docList');
+    const startBtn = document.getElementById('startBtn');
+    const statusText = document.getElementById('statusText');
+    
+    // Upload logic
+    const handleFiles = async (files) => {
+      for (const file of files) {
+        const allowedExts = ['.txt', '.pdf', '.docx', '.pptx', '.png', '.jpg', '.jpeg'];
+        const isAllowed = allowedExts.some(ext => file.name.toLowerCase().endsWith(ext));
+        if (!isAllowed) {
+          alert('Unsupported file type. Supported: txt, pdf, docx, pptx, png, jpg');
+          continue;
+        }
+        
+        statusText.textContent = `Uploading ${file.name}...`;
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        try {
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+          });
+          const data = await res.json();
+          if (data.status === 'success') {
+            const docEl = document.createElement('div');
+            docEl.className = 'doc-item';
+            docEl.textContent = file.name;
+            docList.appendChild(docEl);
+            statusText.textContent = `Uploaded ${file.name}`;
+          }
+        } catch (e) {
+          statusText.textContent = `Upload failed: ${e.message}`;
+        }
       }
-      chatScroll.appendChild(wrap);
-    });
-    chatScroll.scrollTop = chatScroll.scrollHeight;
-  }
-  renderChat();
-
-  /* ============================================================
-     GENERATION
-     ============================================================ */
-  async function askArchive(query){
-    messages.push({ role:'user', content: query });
-    messages.push({ role:'assistant', content:'Thinking...', pending:true });
-    renderChat();
-
-    try {
-      const response = await fetch('/api/query', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ query: query })
-      });
-      const data = await response.json();
-      const answer = data.answer || "I couldn't generate a response just now.";
-      
-      const chunks = (data.context || []).map((text, i) => ({
-        docTitle: "Source " + (i+1),
-        text: text,
-        score: 1.0
-      }));
-
-      messages = messages.filter(m => !m.pending);
-      messages.push({ role:'assistant', content: answer, chunks });
-      renderChat();
-      if (speakEnabled) speak(answer);
-    } catch (err){
-      messages = messages.filter(m => !m.pending);
-      messages.push({ role:'assistant', content:'The backend hit an error. Is the server running?', error:true });
-      renderChat();
-    }
-  }
-
-  async function askArchiveVoice(audioBlob){
-    messages.push({ role:'user', content: "(Voice Message)" });
-    messages.push({ role:'assistant', content:'Processing audio...', pending:true });
-    renderChat();
-
-    try {
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.wav');
-      
-      const response = await fetch('/api/voice', {
-        method:'POST',
-        body: formData
-      });
-      const data = await response.json();
-      
-      // Update the user message with the transcribed query
-      messages[messages.length - 2].content = data.query || "(Unintelligible)";
-      
-      const answer = data.answer || "I couldn't generate a response just now.";
-      const chunks = (data.context || []).map((text, i) => ({
-        docTitle: "Source " + (i+1),
-        text: text,
-        score: 1.0
-      }));
-
-      messages = messages.filter(m => !m.pending);
-      messages.push({ role:'assistant', content: answer, chunks });
-      renderChat();
-      
-      // optionally display latency metrics in the console
-      console.log("Latency Metrics:", data.metrics);
-      
-      if (speakEnabled) speak(answer);
-    } catch (err){
-      messages = messages.filter(m => !m.pending);
-      messages.push({ role:'assistant', content:'The backend hit an error. Is the server running?', error:true });
-      renderChat();
-    }
-  }
-
-  /* ============================================================
-     INPUT HANDLING (hero + chat pills act as one logical input)
-     ============================================================ */
-  const heroInput = document.getElementById('queryInput');
-  const chatInput = document.getElementById('queryInputChat');
-  const sendBtn = document.getElementById('sendBtn');
-  const sendBtnChat = document.getElementById('sendBtnChat');
-
-  function activeInput(){ return messages.length === 0 ? heroInput : chatInput; }
-
-  function autosize(el){ el.style.height='auto'; el.style.height = Math.min(110, el.scrollHeight) + 'px'; }
-  [heroInput, chatInput].forEach(el => el.addEventListener('input', () => autosize(el)));
-
-  function submitFrom(el){
-    const val = el.value.trim();
-    if (!val) return;
-    el.value=''; autosize(el);
-    askArchive(val);
-  }
-  sendBtn.addEventListener('click', () => submitFrom(heroInput));
-  sendBtnChat.addEventListener('click', () => submitFrom(chatInput));
-  [heroInput, chatInput].forEach(el => {
-    el.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submitFrom(el); }
-    });
-  });
-
-  /* ============================================================
-     SPEAK TOGGLE
-     ============================================================ */
-  const speakToggle = document.getElementById('speakToggle');
-  speakToggle.addEventListener('click', () => {
-    speakEnabled = !speakEnabled;
-    speakToggle.classList.toggle('active', speakEnabled);
-    if (!speakEnabled) window.speechSynthesis.cancel();
-  });
-  function speak(text){
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.rate = 1.0;
-    window.speechSynthesis.speak(utter);
-  }
-
-  /* ============================================================
-     MIC HINT TEXT (responsive)
-     ============================================================ */
-  const micHintText = document.getElementById('micHintText');
-  function updateMicHintText(){
-    micHintText.textContent = window.innerWidth <= 640 ? 'Press for Voice mode' : 'Press Ctrl+Space for Voice mode';
-  }
-  updateMicHintText();
-  window.addEventListener('resize', updateMicHintText);
-
-  /* ============================================================
-     LISTENING OVERLAY + VOICE INPUT
-     ============================================================ */
-  const listeningView = document.getElementById('listeningView');
-  const livePill = document.getElementById('livePill');
-  const micHint = document.getElementById('micHint');
-
-  if (!SpeechRecognitionCtor){
-    micHint.style.opacity = '0.4';
-    micHint.title = 'Voice input is not supported in this browser';
-  }
-
-  micHint.addEventListener('click', toggleListening);
-  document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.code === 'Space'){ e.preventDefault(); toggleListening(); }
-  });
-  listeningView.addEventListener('click', () => { if (isListening) stopListening(true); });
-
-  function toggleListening(){
-    if (!SpeechRecognitionCtor) return;
-    if (isListening) stopListening(true); else startListening();
-  }
-
-  async function startListening(){
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err){ return; }
-
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 128;
-    audioCtx.createMediaStreamSource(micStream).connect(analyser);
-
-    audioChunks = [];
-    mediaRecorder = new MediaRecorder(micStream);
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) audioChunks.push(e.data);
     };
     
-    mediaRecorder.start();
-    isListening = true;
-    listeningView.hidden = false;
-    livePill.textContent = 'Recording audio... Speak now.';
-    livePill.classList.remove('placeholder');
-    drawScope();
-  }
-
-  function stopListening(autoSubmit){
-    isListening = false;
-    listeningView.hidden = true;
+    // Drag & Drop
+    dropBox.addEventListener('dragover', (e) => { e.preventDefault(); dropBox.classList.add('drag-over'); });
+    dropBox.addEventListener('dragleave', () => dropBox.classList.remove('drag-over'));
+    dropBox.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropBox.classList.remove('drag-over');
+      handleFiles(e.dataTransfer.files);
+    });
     
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        if (autoSubmit) {
-          askArchiveVoice(audioBlob);
-        }
-        if (micStream){ micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-      };
-      mediaRecorder.stop();
-    } else {
-      if (micStream){ micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-    }
+    uploadBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
     
-    if (audioCtx){ audioCtx.close(); audioCtx = null; }
-    analyser = null;
-  }
-
-  /* ============================================================
-     OSCILLOSCOPE (gradient bar waveform)
-     ============================================================ */
-  const canvas = document.getElementById('scope');
-  const ctx = canvas.getContext('2d');
-  let noiseSeed = [];
-
-  function resizeCanvas(){
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * devicePixelRatio;
-    canvas.height = rect.height * devicePixelRatio;
-    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
-  }
-  window.addEventListener('resize', resizeCanvas);
-
-  function drawScope(){
-    if (!isListening) return;
-    resizeCanvas();
-    const w = canvas.getBoundingClientRect().width;
-    const h = canvas.getBoundingClientRect().height;
-    ctx.clearRect(0,0,w,h);
-
-    const barCount = 72;
-    const gap = 3;
-    const barWidth = (w - gap*(barCount-1)) / barCount;
-
-    let levels = new Array(barCount).fill(0.15);
-    if (analyser){
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      analyser.getByteFrequencyData(data);
-      for (let i=0;i<barCount;i++){
-        const srcIdx = Math.floor((i / barCount) * data.length);
-        levels[i] = data[srcIdx] / 255;
+    // Audio / WebSocket logic
+    let ws = null;
+    let audioCtx = null;
+    let mediaStream = null;
+    let scriptNode = null;
+    let isConversing = false;
+    let nextAudioTime = 0;
+    
+    const startConversation = async () => {
+      try {
+        statusText.textContent = 'Connecting...';
+        
+        // 1. Get Microphone
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: {
+            echoCancellation: true, noiseSuppression: true, autoGainControl: true
+        }});
+        
+        // 2. Setup Audio Context for recording at 16kHz
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        const source = audioCtx.createMediaStreamSource(mediaStream);
+        scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
+        source.connect(scriptNode);
+        scriptNode.connect(audioCtx.destination); // Required for scriptNode to fire
+        
+        nextAudioTime = audioCtx.currentTime;
+        
+        // 3. Connect WebSocket
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`);
+        ws.binaryType = 'arraybuffer';
+        
+        ws.onopen = () => {
+            statusText.textContent = 'Connected. Speak now...';
+            isConversing = true;
+            startBtn.textContent = 'Stop';
+            startBtn.classList.add('active');
+            document.getElementById('orb').classList.add('moving');
+        };
+        
+        ws.onmessage = (event) => {
+            // Play received audio
+            if (event.data instanceof ArrayBuffer) {
+                playAudioChunk(event.data);
+            }
+        };
+        
+        ws.onclose = () => {
+            stopConversation();
+            statusText.textContent = 'Disconnected';
+        };
+        
+        // 4. Send audio
+        scriptNode.onaudioprocess = (e) => {
+            if (!isConversing || ws.readyState !== WebSocket.OPEN) return;
+            const inputData = e.inputBuffer.getChannelData(0);
+            const pcm16 = new Int16Array(inputData.length);
+            for (let i = 0; i < inputData.length; i++) {
+                pcm16[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
+            }
+            ws.send(pcm16.buffer);
+        };
+        
+      } catch (e) {
+        statusText.textContent = `Error: ${e.message}`;
+        stopConversation();
       }
-    }
-
-    if (noiseSeed.length !== barCount){
-      noiseSeed = Array.from({length: barCount}, () => 0.4 + Math.random()*0.6);
-    }
-
-    const gradient = ctx.createLinearGradient(0,0,0,h);
-    gradient.addColorStop(0, '#FF8A34');
-    gradient.addColorStop(1, '#FF2E88');
-    ctx.strokeStyle = gradient;
-    ctx.lineCap = 'round';
-    ctx.lineWidth = barWidth;
-
-    for (let i=0;i<barCount;i++){
-      const edgeFalloff = Math.min(1, (Math.min(i, barCount-1-i) / (barCount*0.12)) + 0.25);
-      const amt = Math.max(0.06, levels[i] * noiseSeed[i] * edgeFalloff);
-      const barH = Math.max(3, amt * h);
-      const x = i * (barWidth + gap) + barWidth/2;
-      ctx.globalAlpha = 0.55 + amt*0.45;
-      ctx.beginPath();
-      ctx.moveTo(x, h/2 - barH/2);
-      ctx.lineTo(x, h/2 + barH/2);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-
-    requestAnimationFrame(drawScope);
-  }
-
-})();
-</script>
+    };
+    
+    const playAudioChunk = (arrayBuffer) => {
+        if (!audioCtx) return;
+        const pcm16 = new Int16Array(arrayBuffer);
+        const float32 = new Float32Array(pcm16.length);
+        for (let i = 0; i < pcm16.length; i++) {
+            float32[i] = pcm16[i] / 32768;
+        }
+        
+        // The default Gemini audio output is 24kHz. 
+        const buffer = audioCtx.createBuffer(1, float32.length, 24000);
+        buffer.getChannelData(0).set(float32);
+        
+        const source = audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioCtx.destination);
+        
+        const playTime = Math.max(audioCtx.currentTime, nextAudioTime);
+        source.start(playTime);
+        nextAudioTime = playTime + buffer.duration;
+    };
+    
+    const stopConversation = () => {
+      isConversing = false;
+      if (ws) { ws.close(); ws = null; }
+      if (scriptNode) { scriptNode.disconnect(); scriptNode = null; }
+      if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+      if (audioCtx) { audioCtx.close(); audioCtx = null; }
+      startBtn.textContent = 'Start Conversation';
+      startBtn.classList.remove('active');
+      document.getElementById('orb').classList.remove('moving');
+    };
+    
+    startBtn.addEventListener('click', () => {
+      if (isConversing) {
+        stopConversation();
+        statusText.textContent = 'Ready';
+      } else {
+        startConversation();
+      }
+    });
+  </script>
 </body>
 </html>

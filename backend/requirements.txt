@@ -13,3 +13,9 @@ scikit-learn
 fastembed
 python-dotenv
 openai
+google-genai
+websockets
+python-docx
+python-pptx
+pymupdf
+Pillow
