@@ -39,21 +39,115 @@ frontend_dir = os.path.join(base_dir, "..", "frontend")
 
 import io
 
-from tenacity import retry, stop_after_attempt, wait_exponential
+import numpy as np
+from PIL import Image
+import os
 
-@retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=2, max=10))
-def perform_ocr_gemini(image_bytes: bytes, mime_type: str) -> str:
+# Disable the new PIR API to fix the ConvertPirAttribute2RuntimeAttribute crash in recent Paddle versions
+os.environ['FLAGS_enable_pir_api'] = '0'
+
+# Initialize PaddleOCR globally so model weights load only once
+# use_angle_cls=True helps with rotated text
+try:
+    from paddleocr import PaddleOCR
+    ocr_model = PaddleOCR(
+        use_angle_cls=False, # Skips the angle classification pass to save 50% time
+        lang='en',
+        enable_mkldnn=False,
+        cpu_threads=4 # Limit threads so it doesn't fight the OS
+        )
+except ImportError:
+    ocr_model = None
+    print("PaddleOCR not installed. OCR will be disabled.")
+
+import threading
+import time
+
+paddle_lock = threading.Lock()
+
+def perform_ocr_hybrid(image_bytes: bytes, mime_type: str) -> str:
     from google import genai
     from google.genai import types
-    client = genai.Client()
-    response = client.models.generate_content(
-        model='gemini-3.6-flash',
-        contents=[
-            types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-            "Extract all text from this accurately."
-        ]
-    )
-    return response.text
+    
+    try:
+        client = genai.Client()
+        for attempt in range(5):
+            try:
+                response = client.models.generate_content(
+                    model='gemini-3.6-flash',
+                    contents=[
+                        types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                        "Extract all text from this accurately."
+                    ]
+                )
+                if response and response.text:
+                    return response.text
+                return ""
+            except Exception as e:
+                print(f"Gemini OCR attempt {attempt+1} failed: {e}")
+                if attempt < 4:
+                    time.sleep(4)
+    except Exception:
+        pass
+        
+    print("Gemini OCR exhausted. Routing to Local OCR Cascade...")
+    
+    try:
+        image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+    except Exception:
+        return ""
+        
+    # === Fast CPU Fallback: Tesseract ===
+    try:
+        import pytesseract
+        import re
+        import os
+        
+        # Configure Tesseract path if needed for Windows
+        tess_path = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+        if os.path.exists(tess_path):
+            pytesseract.pytesseract.tesseract_cmd = tess_path
+            
+        tesseract_text = pytesseract.image_to_string(image).strip()
+        
+        # Quality Check (Heuristic: are there enough valid words/alphanumeric chars?)
+        if len(tesseract_text) > 5:
+            # Count standard characters vs total
+            standard_chars = len(re.findall(r'[a-zA-Z0-9\s.,!?:;\'"()-]', tesseract_text))
+            ratio = standard_chars / len(tesseract_text)
+            
+            if ratio > 0.8: # Good quality read!
+                print("Tesseract OCR succeeded with GOOD quality.")
+                return tesseract_text
+            else:
+                print(f"Tesseract OCR quality BAD (Garbage ratio high: {ratio:.2f}). Escaping to PaddleOCR...")
+        else:
+            print("Tesseract OCR quality BAD (Too little text). Escaping to PaddleOCR...")
+            
+    except Exception as e:
+        print(f"Tesseract skipped/failed ({e}). Routing directly to PaddleOCR...")
+
+    # === Complex Fallback: PaddleOCR ===
+    if not ocr_model:
+        return ""
+        
+    try:
+        with paddle_lock:
+            img_array = np.array(image)
+            
+            result = ocr_model.ocr(img_array)
+            if not result or not result[0]:
+                return ""
+                
+            text_parts = []
+            for line in result[0]:
+                text_parts.append(line[1][0])
+                
+            print("PaddleOCR completed successfully.")
+            return "\n".join(text_parts)
+    except Exception as e:
+        print(f"PaddleOCR fallback failed: {e}")
+        return ""
 
 def extract_pdf_text(file_bytes: bytes) -> str:
     import fitz
@@ -78,7 +172,7 @@ def extract_pdf_text(file_bytes: bytes) -> str:
                     image_bytes = base_image["image"]
                     ext = base_image["ext"]
                     mime = "image/jpeg" if ext in ("jpeg", "jpg") else "image/png"
-                    futures.append(executor.submit(perform_ocr_gemini, image_bytes, mime))
+                    futures.append(executor.submit(perform_ocr_hybrid, image_bytes, mime))
                 except Exception as e:
                     print(f"Skipping an embedded image due to error: {e}")
                     
@@ -86,7 +180,7 @@ def extract_pdf_text(file_bytes: bytes) -> str:
             if len(text.strip()) < 30 and not image_list:
                 pix = page.get_pixmap(dpi=150)
                 img_bytes = pix.tobytes("png")
-                futures.append(executor.submit(perform_ocr_gemini, img_bytes, "image/png"))
+                futures.append(executor.submit(perform_ocr_hybrid, img_bytes, "image/png"))
 
         for future in futures:
             try:
@@ -124,7 +218,7 @@ def extract_docx_text(file_bytes: bytes) -> str:
                 try:
                     image_bytes = rel.target_part.blob
                     mime = getattr(rel.target_part, "content_type", "image/jpeg")
-                    futures.append(executor.submit(perform_ocr_gemini, image_bytes, mime))
+                    futures.append(executor.submit(perform_ocr_hybrid, image_bytes, mime))
                 except Exception as e:
                     print(f"Skipping docx image due to error: {e}")
                     
@@ -157,7 +251,7 @@ def extract_pptx_text(file_bytes: bytes) -> str:
                     try:
                         image_bytes = shape.image.blob
                         mime = getattr(shape.image, "content_type", "image/jpeg")
-                        futures.append(executor.submit(perform_ocr_gemini, image_bytes, mime))
+                        futures.append(executor.submit(perform_ocr_hybrid, image_bytes, mime))
                     except Exception as e:
                         print(f"Skipping pptx image due to error: {e}")
                         
