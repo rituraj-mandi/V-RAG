@@ -57,37 +57,42 @@ def perform_ocr_gemini(image_bytes: bytes, mime_type: str) -> str:
 
 def extract_pdf_text(file_bytes: bytes) -> str:
     import fitz
+    import concurrent.futures
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     text_parts = []
-    for page in doc:
-        # 1. Get standard text
-        text = page.get_text()
-        if text.strip():
-            text_parts.append(text)
-            
-        # 2. Extract and OCR any embedded images on the page
-        image_list = page.get_images(full=True)
-        for img in image_list:
-            xref = img[0]
-            try:
-                base_image = doc.extract_image(xref)
-                image_bytes = base_image["image"]
-                ext = base_image["ext"]
-                mime = "image/jpeg" if ext in ("jpeg", "jpg") else "image/png"
-                ocr_text = perform_ocr_gemini(image_bytes, mime)
-                if ocr_text.strip():
-                    text_parts.append(f"[Image Content]: {ocr_text.strip()}")
-            except Exception as e:
-                print(f"Skipping an embedded image due to error: {e}")
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = []
+        for page in doc:
+            # 1. Get standard text
+            text = page.get_text()
+            if text.strip():
+                text_parts.append(text)
                 
-        # 3. Fallback for completely unparseable scanned pages that hide images in weird streams
-        if len(text.strip()) < 30 and not image_list:
-            pix = page.get_pixmap(dpi=150)
-            img_bytes = pix.tobytes("png")
+            # 2. Extract and OCR any embedded images on the page
+            image_list = page.get_images(full=True)
+            for img in image_list:
+                xref = img[0]
+                try:
+                    base_image = doc.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    ext = base_image["ext"]
+                    mime = "image/jpeg" if ext in ("jpeg", "jpg") else "image/png"
+                    futures.append(executor.submit(perform_ocr_gemini, image_bytes, mime))
+                except Exception as e:
+                    print(f"Skipping an embedded image due to error: {e}")
+                    
+            # 3. Fallback for completely unparseable scanned pages that hide images in weird streams
+            if len(text.strip()) < 30 and not image_list:
+                pix = page.get_pixmap(dpi=150)
+                img_bytes = pix.tobytes("png")
+                futures.append(executor.submit(perform_ocr_gemini, img_bytes, "image/png"))
+
+        for future in futures:
             try:
-                ocr_text = perform_ocr_gemini(img_bytes, "image/png")
-                if ocr_text.strip():
-                    text_parts.append(ocr_text)
+                ocr_text = future.result()
+                if ocr_text and ocr_text.strip():
+                    text_parts.append(f"[Image Content]: {ocr_text.strip()}")
             except Exception:
                 pass
 
@@ -95,6 +100,7 @@ def extract_pdf_text(file_bytes: bytes) -> str:
 
 def extract_docx_text(file_bytes: bytes) -> str:
     from docx import Document
+    import concurrent.futures
     doc = Document(io.BytesIO(file_bytes))
     text_parts = []
     
@@ -111,39 +117,57 @@ def extract_docx_text(file_bytes: bytes) -> str:
                     text_parts.append(cell.text.strip())
                     
     # 3. OCR on embedded images
-    for rel in doc.part.rels.values():
-        if "image" in rel.reltype:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = []
+        for rel in doc.part.rels.values():
+            if "image" in rel.reltype:
+                try:
+                    image_bytes = rel.target_part.blob
+                    mime = getattr(rel.target_part, "content_type", "image/jpeg")
+                    futures.append(executor.submit(perform_ocr_gemini, image_bytes, mime))
+                except Exception as e:
+                    print(f"Skipping docx image due to error: {e}")
+                    
+        for future in futures:
             try:
-                image_bytes = rel.target_part.blob
-                mime = getattr(rel.target_part, "content_type", "image/jpeg")
-                ocr_text = perform_ocr_gemini(image_bytes, mime)
-                if ocr_text.strip():
+                ocr_text = future.result()
+                if ocr_text and ocr_text.strip():
                     text_parts.append(f"[Image Content]: {ocr_text.strip()}")
-            except Exception as e:
-                print(f"Skipping docx image due to error: {e}")
+            except Exception:
+                pass
                 
     return "\n".join(text_parts)
 
 def extract_pptx_text(file_bytes: bytes) -> str:
     from pptx import Presentation
+    import concurrent.futures
     prs = Presentation(io.BytesIO(file_bytes))
     text_parts = []
-    for slide in prs.slides:
-        for shape in slide.shapes:
-            # 1. Text from shapes
-            if hasattr(shape, "text") and shape.text.strip():
-                text_parts.append(shape.text.strip())
-                
-            # 2. OCR on pictures
-            if hasattr(shape, "image"):
-                try:
-                    image_bytes = shape.image.blob
-                    mime = getattr(shape.image, "content_type", "image/jpeg")
-                    ocr_text = perform_ocr_gemini(image_bytes, mime)
-                    if ocr_text.strip():
-                        text_parts.append(f"[Image Content]: {ocr_text.strip()}")
-                except Exception as e:
-                    print(f"Skipping pptx image due to error: {e}")
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = []
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                # 1. Text from shapes
+                if hasattr(shape, "text") and shape.text.strip():
+                    text_parts.append(shape.text.strip())
+                    
+                # 2. OCR on pictures
+                if hasattr(shape, "image"):
+                    try:
+                        image_bytes = shape.image.blob
+                        mime = getattr(shape.image, "content_type", "image/jpeg")
+                        futures.append(executor.submit(perform_ocr_gemini, image_bytes, mime))
+                    except Exception as e:
+                        print(f"Skipping pptx image due to error: {e}")
+                        
+        for future in futures:
+            try:
+                ocr_text = future.result()
+                if ocr_text and ocr_text.strip():
+                    text_parts.append(f"[Image Content]: {ocr_text.strip()}")
+            except Exception:
+                pass
                     
     return "\n".join(text_parts)
 
