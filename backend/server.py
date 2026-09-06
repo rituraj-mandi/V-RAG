@@ -8,12 +8,14 @@ import time
 import asyncio
 import threading
 import concurrent.futures
+from contextlib import asynccontextmanager
 import numpy as np
 from PIL import Image
 import fitz
 from docx import Document
 from pptx import Presentation
 import websockets
+import uvicorn
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -54,7 +56,23 @@ except ImportError:
 
 paddle_lock = threading.Lock()
 
-app = FastAPI(title="Voice RAG API - Gemini Live")
+rag = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global rag
+    print("\n" + "="*60)
+    print("⏳ Starting V-RAG Backend Initialization...")
+    print("⏳ Loading Qdrant database and AI models...")
+    print("="*60)
+    rag = RAGPipeline()
+    print("="*60)
+    print("✅ SUCCESS: All embedding models & Qdrant database loaded!")
+    print("🚀 Server is READY to handle document uploads & voice queries.")
+    print("="*60 + "\n")
+    yield
+
+app = FastAPI(title="Voice RAG API - Gemini Live", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -66,21 +84,6 @@ app.add_middleware(
 
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
-
-rag = None
-
-@app.on_event("startup")
-async def startup_event():
-    global rag
-    print("\n" + "="*60)
-    print("⏳ Starting V-RAG Backend Initialization...")
-    print("⏳ Loading Qdrant database and AI models...")
-    print("="*60)
-    rag = RAGPipeline()
-    print("="*60)
-    print("✅ SUCCESS: All embedding models & Qdrant database loaded!")
-    print("🚀 Server is READY to handle document uploads & voice queries.")
-    print("="*60 + "\n")
 
 def perform_ocr_hybrid(image_bytes: bytes, mime_type: str) -> str:
     try:
