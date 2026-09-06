@@ -300,7 +300,7 @@ async def upload_doc(file: UploadFile = File(...)):
             text = extract_pptx_text(content)
         elif filename.endswith((".png", ".jpg", ".jpeg")):
             mime = "image/png" if filename.endswith(".png") else "image/jpeg"
-            text = perform_ocr_gemini(content, mime)
+            text = perform_ocr_hybrid(content, mime)
         else:
             # Fallback to plain text
             text = content.decode("utf-8", errors="ignore")
@@ -482,9 +482,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
 app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
-@app.get("/4c277e81f6fa23aec2a198d848d3ef6c.gif")
-async def get_orb_gif():
-    return FileResponse(os.path.join(frontend_dir, "4c277e81f6fa23aec2a198d848d3ef6c.gif"))
+@app.get("/original-c57b681754e7d29bb59792de101d6bd2.mp4")
+async def get_orb_video():
+    return FileResponse(os.path.join(frontend_dir, "original-c57b681754e7d29bb59792de101d6bd2.mp4"), media_type="video/mp4")
 
 @app.get("/")
 async def root():

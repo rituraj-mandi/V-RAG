@@ -8,16 +8,20 @@
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
   
   :root {
-    --bg: #09090b;
-    --ink: #fafafa;
-    --border: #27272a;
-    --panel: #18181b;
-    --primary: #fafafa;
-    --primary-text: #09090b;
-    --danger: #ef4444;
+    --bg: #e5e6e9;
+    --ink: #18181b;
+    --border: #d1d2d6;
+    --panel: #f4f4f6;
+    --primary: #18181b;
+    --primary-text: #ffffff;
+    --danger: #dc2626;
+    --orb-bg: #e5e6e9;
   }
   
   * { box-sizing: border-box; }
+  html, body {
+    background: #e5e6e9;
+  }
   body {
     margin: 0; padding: 0;
     font-family: 'Plus Jakarta Sans', sans-serif;
@@ -25,6 +29,7 @@
     height: 100vh;
     overflow: hidden;
     color: var(--ink);
+    background: var(--bg);
   }
   
   .side-panel {
@@ -48,7 +53,7 @@
   .overlay {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.3);
+    background: rgba(0,0,0,0.2);
     z-index: 9;
     opacity: 0;
     pointer-events: none;
@@ -86,12 +91,13 @@
     gap: 8px;
   }
   .doc-item {
-    background: var(--bg);
+    background: #ffffff;
     border: 1px solid var(--border);
     padding: 12px;
     border-radius: 8px;
     font-size: 0.85rem;
     word-break: break-all;
+    color: #18181b;
   }
   
   .main-area {
@@ -101,7 +107,7 @@
     align-items: center;
     justify-content: center;
     padding: 40px;
-    background: var(--bg);
+    background: #e5e6e9;
     gap: 24px;
   }
   
@@ -115,19 +121,19 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: var(--panel);
+    background: #ffffff;
     transition: all 0.2s;
     gap: 12px;
     text-align: center;
   }
   .drop-box.drag-over {
     border-color: var(--ink);
-    background: #27272a;
+    background: #e5e6e9;
   }
   .drop-box p {
     margin: 0;
     font-weight: 500;
-    color: #a1a1aa;
+    color: #52525b;
     font-size: 0.9rem;
   }
   
@@ -146,11 +152,11 @@
   .btn:hover { opacity: 0.9; }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .btn-upload {
-    background: transparent;
+    background: #ffffff;
     color: var(--ink);
     border: 1px solid var(--border);
   }
-  .btn-upload:hover { background: #27272a; }
+  .btn-upload:hover { background: #e5e6e9; }
   
   .start-btn {
     font-size: 1.2rem;
@@ -165,13 +171,13 @@
   
   .status {
     font-size: 0.9rem;
-    color: #a1a1aa;
+    color: #52525b;
     height: 20px;
   }
   
   .assistant-orb {
-    width: 250px;
-    height: 250px;
+    width: 500px;
+    height: 500px;
     border-radius: 50%;
     margin-bottom: 20px;
     object-fit: cover;
@@ -200,7 +206,7 @@
   </div>
   
   <div class="main-area">
-    <img class="assistant-orb" id="orb" src="/4c277e81f6fa23aec2a198d848d3ef6c.gif" alt="Orb">
+    <video class="assistant-orb" id="orb" src="/original-c57b681754e7d29bb59792de101d6bd2.mp4" muted playsinline loop></video>
     <button class="btn start-btn" id="startBtn">Start Conversation</button>
     <div class="status" id="statusText">Ready</div>
   </div>
@@ -279,9 +285,9 @@
         viewBtn.style.padding = '2px 8px';
         viewBtn.style.fontSize = '0.75rem';
         viewBtn.style.cursor = 'pointer';
-        viewBtn.style.background = '#27272a';
-        viewBtn.style.border = '1px solid #3f3f46';
-        viewBtn.style.color = '#fafafa';
+        viewBtn.style.background = '#e5e6e9';
+        viewBtn.style.border = '1px solid #d1d2d6';
+        viewBtn.style.color = '#18181b';
         viewBtn.style.borderRadius = '4px';
         viewBtn.onclick = () => window.open(doc.url, '_blank');
         btnGroup.appendChild(viewBtn);
@@ -292,9 +298,9 @@
       delBtn.style.padding = '2px 8px';
       delBtn.style.fontSize = '0.75rem';
       delBtn.style.cursor = 'pointer';
-      delBtn.style.background = '#7f1d1d';
-      delBtn.style.border = '1px solid #991b1b';
-      delBtn.style.color = '#fafafa';
+      delBtn.style.background = '#fee2e2';
+      delBtn.style.border = '1px solid #fca5a5';
+      delBtn.style.color = '#991b1b';
       delBtn.style.borderRadius = '4px';
       delBtn.onclick = async () => {
         if (confirm('Delete this document?')) {
@@ -347,28 +353,20 @@
     let isConversing = false;
     let nextAudioTime = 0;
     
-    // GIF Freeze Logic
-    const orbImg = document.getElementById('orb');
-    const gifUrl = '/4c277e81f6fa23aec2a198d848d3ef6c.gif';
-    let frozenDataUrl = '';
+    // Video Control Logic for Orb
+    const orbVideo = document.getElementById('orb');
 
-    const prepareFrozenFrame = () => {
-      const tempImg = new Image();
-      tempImg.crossOrigin = 'anonymous';
-      tempImg.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = tempImg.naturalWidth || 250;
-        canvas.height = tempImg.naturalHeight || 250;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(tempImg, 0, 0, canvas.width, canvas.height);
-        frozenDataUrl = canvas.toDataURL();
-        if (!isConversing) {
-          orbImg.src = frozenDataUrl;
-        }
-      };
-      tempImg.src = gifUrl;
+    const pauseVideoAtPauseFrame = () => {
+      orbVideo.pause();
+      try {
+        orbVideo.currentTime = 7; // Pause at 0:07 timestamp when idle
+      } catch (e) {
+        orbVideo.currentTime = 0;
+      }
     };
-    prepareFrozenFrame();
+
+    orbVideo.addEventListener('loadedmetadata', pauseVideoAtPauseFrame);
+    pauseVideoAtPauseFrame();
 
     const startConversation = async () => {
       try {
@@ -398,7 +396,8 @@
             isConversing = true;
             startBtn.textContent = 'Stop';
             startBtn.classList.add('active');
-            orbImg.src = `${gifUrl}?t=${Date.now()}`;
+            orbVideo.currentTime = 0;
+            orbVideo.play().catch(e => console.error("Play error:", e));
         };
         
         ws.onmessage = (event) => {
@@ -459,9 +458,7 @@
       if (audioCtx) { audioCtx.close(); audioCtx = null; }
       startBtn.textContent = 'Start Conversation';
       startBtn.classList.remove('active');
-      if (frozenDataUrl) {
-        orbImg.src = frozenDataUrl;
-      }
+      pauseVideoAtPauseFrame();
     };
     
     startBtn.addEventListener('click', () => {
