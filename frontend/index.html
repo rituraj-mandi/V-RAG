@@ -397,6 +397,7 @@
             startBtn.textContent = 'Stop';
             startBtn.classList.add('active');
             orbVideo.currentTime = 0;
+            orbVideo.playbackRate = 0.75; // Slower playback rate during conversation
             orbVideo.play().catch(e => console.error("Play error:", e));
         };
         
