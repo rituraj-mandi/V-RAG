@@ -13,6 +13,7 @@ load_dotenv()
 
 class RAGPipeline:
     def __init__(self, qdrant_path="./qdrant_data", collection_name="msmarco_hybrid"):
+        print("  - Connecting to Qdrant vector database...")
         self.client = QdrantClient(path=qdrant_path)
         self.collection_name = collection_name
         
@@ -22,10 +23,19 @@ class RAGPipeline:
                 vectors_config={"dense": VectorParams(size=384, distance=Distance.COSINE)},
                 sparse_vectors_config={"sparse": SparseVectorParams(index=SparseIndexParams(on_disk=False))}
             )
+        print("  - Qdrant collection ready.")
         
+        print("  - Loading Dense Embedding Model (BAAI/bge-small-en-v1.5)...")
         self.dense_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        print("  - Dense Embedding Model loaded.")
+
+        print("  - Loading Sparse Embedding Model (Qdrant/bm25)...")
         self.sparse_model = SparseTextEmbedding(model_name="Qdrant/bm25")
+        print("  - Sparse Embedding Model loaded.")
+
+        print("  - Loading Cross-Encoder Reranker (ms-marco-MiniLM-L-6-v2)...")
         self.reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', max_length=512)
+        print("  - Cross-Encoder Reranker loaded.")
 
     def retrieve(self, query, top_k=20):
         dense_vec = list(self.dense_model.embed([query]))[0].tolist()

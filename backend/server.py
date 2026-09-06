@@ -72,7 +72,15 @@ rag = None
 @app.on_event("startup")
 async def startup_event():
     global rag
+    print("\n" + "="*60)
+    print("⏳ Starting V-RAG Backend Initialization...")
+    print("⏳ Loading Qdrant database and AI models...")
+    print("="*60)
     rag = RAGPipeline()
+    print("="*60)
+    print("✅ SUCCESS: All embedding models & Qdrant database loaded!")
+    print("🚀 Server is READY to handle document uploads & voice queries.")
+    print("="*60 + "\n")
 
 def perform_ocr_hybrid(image_bytes: bytes, mime_type: str) -> str:
     try:
