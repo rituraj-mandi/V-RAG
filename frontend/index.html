@@ -170,35 +170,12 @@
   }
   
   .assistant-orb {
-    width: 200px;
-    height: 200px;
+    width: 250px;
+    height: 250px;
     border-radius: 50%;
     margin-bottom: 20px;
-    background: radial-gradient(circle at 30% 30%, #5ce1e6, #8c52ff 50%, #ff61d8);
-    box-shadow: 
-      inset -10px -10px 20px rgba(0,0,0,0.1),
-      0 0 20px rgba(140, 82, 255, 0.4),
-      0 0 40px rgba(92, 225, 230, 0.4);
-    animation: orbFloat 4s ease-in-out infinite;
-    transition: all 0.3s;
-  }
-  
-  .assistant-orb.moving {
-    animation: orbActive 0.8s alternate infinite ease-in-out;
-    box-shadow: 
-      inset -10px -10px 20px rgba(0,0,0,0.1),
-      0 0 40px rgba(140, 82, 255, 0.8),
-      0 0 80px rgba(92, 225, 230, 0.8);
-  }
-  
-  @keyframes orbFloat {
-    0%, 100% { transform: translateY(0) scale(1); }
-    50% { transform: translateY(-10px) scale(1.02); }
-  }
-  
-  @keyframes orbActive {
-    0% { transform: scale(1); filter: hue-rotate(0deg); }
-    100% { transform: scale(1); filter: hue-rotate(30deg); }
+    object-fit: cover;
+    transition: transform 0.3s;
   }
 </style>
 </head>
@@ -223,7 +200,7 @@
   </div>
   
   <div class="main-area">
-    <div class="assistant-orb" id="orb"></div>
+    <img class="assistant-orb" id="orb" src="/4c277e81f6fa23aec2a198d848d3ef6c.gif" alt="Orb">
     <button class="btn start-btn" id="startBtn">Start Conversation</button>
     <div class="status" id="statusText">Ready</div>
   </div>
@@ -258,7 +235,7 @@
           continue;
         }
         
-        statusText.textContent = `Uploading ${file.name}...`;
+        statusText.textContent = `Uploading ${file.name}... (It may take a while)`;
         const formData = new FormData();
         formData.append('file', file);
         
@@ -269,10 +246,7 @@
           });
           const data = await res.json();
           if (data.status === 'success') {
-            const docEl = document.createElement('div');
-            docEl.className = 'doc-item';
-            docEl.textContent = file.name;
-            docList.appendChild(docEl);
+            appendDocItem(data);
             statusText.textContent = `Uploaded ${file.name}`;
           }
         } catch (e) {
@@ -281,6 +255,61 @@
       }
     };
     
+    // Create doc item with buttons
+    const appendDocItem = (doc) => {
+      const docEl = document.createElement('div');
+      docEl.className = 'doc-item';
+      docEl.style.display = 'flex';
+      docEl.style.justifyContent = 'space-between';
+      docEl.style.alignItems = 'center';
+      
+      const titleSpan = document.createElement('span');
+      titleSpan.textContent = doc.title;
+      titleSpan.style.overflow = 'hidden';
+      titleSpan.style.textOverflow = 'ellipsis';
+      titleSpan.style.whiteSpace = 'nowrap';
+      
+      const btnGroup = document.createElement('div');
+      btnGroup.style.display = 'flex';
+      btnGroup.style.gap = '5px';
+      
+      if (doc.url) {
+        const viewBtn = document.createElement('button');
+        viewBtn.textContent = 'View';
+        viewBtn.style.padding = '2px 8px';
+        viewBtn.style.fontSize = '0.75rem';
+        viewBtn.style.cursor = 'pointer';
+        viewBtn.style.background = '#27272a';
+        viewBtn.style.border = '1px solid #3f3f46';
+        viewBtn.style.color = '#fafafa';
+        viewBtn.style.borderRadius = '4px';
+        viewBtn.onclick = () => window.open(doc.url, '_blank');
+        btnGroup.appendChild(viewBtn);
+      }
+      
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Del';
+      delBtn.style.padding = '2px 8px';
+      delBtn.style.fontSize = '0.75rem';
+      delBtn.style.cursor = 'pointer';
+      delBtn.style.background = '#7f1d1d';
+      delBtn.style.border = '1px solid #991b1b';
+      delBtn.style.color = '#fafafa';
+      delBtn.style.borderRadius = '4px';
+      delBtn.onclick = async () => {
+        if (confirm('Delete this document?')) {
+          delBtn.textContent = '...';
+          const res = await fetch(`/api/documents/${doc.doc_id}`, { method: 'DELETE' });
+          if (res.ok) docEl.remove();
+        }
+      };
+      btnGroup.appendChild(delBtn);
+      
+      docEl.appendChild(titleSpan);
+      docEl.appendChild(btnGroup);
+      docList.appendChild(docEl);
+    };
+
     // Fetch initial docs
     const fetchDocuments = async () => {
       try {
@@ -288,12 +317,7 @@
         const data = await res.json();
         if (data.status === 'success') {
           docList.innerHTML = '';
-          data.documents.forEach(doc => {
-            const docEl = document.createElement('div');
-            docEl.className = 'doc-item';
-            docEl.textContent = doc.title;
-            docList.appendChild(docEl);
-          });
+          data.documents.forEach(doc => appendDocItem(doc));
         }
       } catch (e) {
         console.error("Failed to load documents:", e);
@@ -323,6 +347,29 @@
     let isConversing = false;
     let nextAudioTime = 0;
     
+    // GIF Freeze Logic
+    const orbImg = document.getElementById('orb');
+    const gifUrl = '/4c277e81f6fa23aec2a198d848d3ef6c.gif';
+    let frozenDataUrl = '';
+
+    const prepareFrozenFrame = () => {
+      const tempImg = new Image();
+      tempImg.crossOrigin = 'anonymous';
+      tempImg.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = tempImg.naturalWidth || 250;
+        canvas.height = tempImg.naturalHeight || 250;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(tempImg, 0, 0, canvas.width, canvas.height);
+        frozenDataUrl = canvas.toDataURL();
+        if (!isConversing) {
+          orbImg.src = frozenDataUrl;
+        }
+      };
+      tempImg.src = gifUrl;
+    };
+    prepareFrozenFrame();
+
     const startConversation = async () => {
       try {
         statusText.textContent = 'Connecting...';
@@ -351,7 +398,7 @@
             isConversing = true;
             startBtn.textContent = 'Stop';
             startBtn.classList.add('active');
-            document.getElementById('orb').classList.add('moving');
+            orbImg.src = `${gifUrl}?t=${Date.now()}`;
         };
         
         ws.onmessage = (event) => {
@@ -412,7 +459,9 @@
       if (audioCtx) { audioCtx.close(); audioCtx = null; }
       startBtn.textContent = 'Start Conversation';
       startBtn.classList.remove('active');
-      document.getElementById('orb').classList.remove('moving');
+      if (frozenDataUrl) {
+        orbImg.src = frozenDataUrl;
+      }
     };
     
     startBtn.addEventListener('click', () => {

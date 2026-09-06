@@ -182,3 +182,24 @@ class RAGPipeline:
         except Exception as e:
             print(f"Error fetching documents: {e}")
             return []
+
+    def delete_document(self, doc_id: str):
+        from qdrant_client.http import models
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.FilterSelector(
+                    filter=models.Filter(
+                        must=[
+                            models.FieldCondition(
+                                key="doc_id",
+                                match=models.MatchValue(value=doc_id)
+                            )
+                        ]
+                    )
+                )
+            )
+            print(f"Deleted document {doc_id} from Qdrant.")
+        except Exception as e:
+            print(f"Error deleting document {doc_id}: {e}")
+            raise e

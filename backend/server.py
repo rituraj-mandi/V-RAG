@@ -13,7 +13,19 @@ import uvicorn
 from rag_pipeline import RAGPipeline
 from dotenv import load_dotenv
 
-load_dotenv()
+# Ensure absolute paths for dotenv and frontend mounting
+base_dir = os.path.dirname(os.path.abspath(__file__))
+root_env = os.path.join(base_dir, "..", ".env")
+backend_env = os.path.join(base_dir, ".env")
+
+if os.path.exists(root_env):
+    load_dotenv(root_env)
+elif os.path.exists(backend_env):
+    load_dotenv(backend_env)
+else:
+    load_dotenv()
+
+frontend_dir = os.path.join(base_dir, "..", "frontend")
 
 app = FastAPI(title="Voice RAG API - Gemini Live")
 
@@ -265,6 +277,14 @@ def extract_pptx_text(file_bytes: bytes) -> str:
                     
     return "\n".join(text_parts)
 
+from fastapi.staticfiles import StaticFiles
+import os
+
+# Create uploads directory
+UPLOADS_DIR = os.path.join(base_dir, "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
 @app.post("/api/upload")
 async def upload_doc(file: UploadFile = File(...)):
     content = await file.read()
@@ -290,26 +310,66 @@ async def upload_doc(file: UploadFile = File(...)):
 
     doc_id = str(uuid.uuid4())
     rag.add_document(text, doc_id, file.filename)
-    return {"status": "success", "doc_id": doc_id, "title": file.filename}
+    
+    # Save file to uploads directory for viewing
+    ext = os.path.splitext(file.filename)[1]
+    safe_filename = f"{doc_id}{ext}"
+    file_path = os.path.join(UPLOADS_DIR, safe_filename)
+    with open(file_path, "wb") as f:
+        f.write(content)
+        
+    return {"status": "success", "doc_id": doc_id, "title": file.filename, "url": f"/uploads/{safe_filename}"}
 
 @app.get("/api/documents")
 async def get_documents():
     if rag:
         docs = rag.get_all_documents()
+        # Attach URLs based on doc_id
+        for doc in docs:
+            # Try to find the file in uploads with the doc_id prefix
+            doc["url"] = ""
+            for f in os.listdir(UPLOADS_DIR):
+                if f.startswith(doc["doc_id"]):
+                    doc["url"] = f"/uploads/{f}"
+                    break
         return {"status": "success", "documents": docs}
+    return {"status": "error", "message": "RAG pipeline not initialized"}
+
+@app.delete("/api/documents/{doc_id}")
+async def delete_doc(doc_id: str):
+    if rag:
+        try:
+            rag.delete_document(doc_id)
+            # Remove file from disk
+            for f in os.listdir(UPLOADS_DIR):
+                if f.startswith(doc_id):
+                    os.remove(os.path.join(UPLOADS_DIR, f))
+                    break
+            return {"status": "success"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
     return {"status": "error", "message": "RAG pipeline not initialized"}
 
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     
-    api_key = os.getenv("GEMINI_API_KEY")
+    raw_key = os.getenv("GEMINI_API_KEY", "")
+    api_key = raw_key.strip().strip('"').strip("'")
     if not api_key:
-        print("Error: GEMINI_API_KEY not set")
-        await websocket.close()
+        print("Error: GEMINI_API_KEY not set or empty in .env")
+        await websocket.close(code=1008)
         return
 
+    print(f"Connecting to Gemini Live WS using key starting with '{api_key[:6]}...'")
+
+    # Both Standard (AIzaSy...) and Auth (AQ....) keys authenticate the same way
+    # for the Live API WebSocket: as a `key` query parameter. Do NOT send AQ. keys
+    # as an Authorization: Bearer header -- they are API keys, not OAuth access
+    # tokens, and Google will reject a Bearer-style AQ. key with 1008 policy
+    # violation / "Expected OAuth 2 access token...".
     gemini_ws_url = f"wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key={api_key}"
+    headers = None
     
     setup_msg = {
         "setup": {
@@ -335,7 +395,8 @@ async def websocket_endpoint(websocket: WebSocket):
     }
     
     try:
-        async with websockets.connect(gemini_ws_url) as gemini_ws:
+        connect_kwargs = {"additional_headers": headers} if headers else {}
+        async with websockets.connect(gemini_ws_url, **connect_kwargs) as gemini_ws:
             await gemini_ws.send(json.dumps(setup_msg))
             
             # Wait for setup complete
@@ -421,9 +482,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
 app.mount("/static", StaticFiles(directory=frontend_dir), name="static")
 
-@app.get("/orb.jpg")
-async def get_orb():
-    return FileResponse(os.path.join(frontend_dir, "orb.jpg"))
+@app.get("/4c277e81f6fa23aec2a198d848d3ef6c.gif")
+async def get_orb_gif():
+    return FileResponse(os.path.join(frontend_dir, "4c277e81f6fa23aec2a198d848d3ef6c.gif"))
 
 @app.get("/")
 async def root():
