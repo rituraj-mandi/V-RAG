@@ -1,75 +1,122 @@
-# Voice-Enabled RAG
+# Voice-Enabled RAG (V-RAG)
 
-V-RAG (Voice RAG) is a voice-based Retrieval-Augmented Generation assistant that lets you upload documents and talk to an AI assistant about their contents.
+V-RAG is a voice-based Retrieval-Augmented Generation assistant that lets you upload documents and talk to an AI assistant about their contents in real-time.
 
 It supports PDF, DOCX, PPTX, TXT, PNG, JPG, and JPEG files. Uploaded documents are processed, embedded into a local Qdrant vector database, and retrieved when the assistant needs information from them.
 
+---
+
+## ⚡ Prerequisites
+
+> [!IMPORTANT]
+> **Python 3.11 ONLY** is required for this project. 
+> Python versions below 3.11 lack required async typing features, and versions 3.12+ are incompatible with pre-compiled `paddlepaddle` / `paddleocr` C++ wheels.
+
+* **Python:** `3.11.x`
+* **System OCR (Optional for fast local fallback):** [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki)
+
+---
+
 ## Features
-- 🎙️ **Real-time voice conversation** with Gemini Live
-- 📄 **Upload** PDF, DOCX, PPTX, TXT and images
-- 🔍 **Hybrid document search** using:
-  - Dense semantic embeddings (`BAAI/bge-small-en-v1.5`)
-  - Sparse BM25 search (`Qdrant/bm25`)
-  - Reciprocal Rank Fusion (RRF)
-- 🧠 **Cross-encoder reranking** in the RAG pipeline
-- 🖼️ **OCR** for images and images embedded inside documents
-- 💾 **Local Qdrant** vector database
-- 🌐 **FastAPI backend** + simple web frontend
 
-## How it Works (Pipeline)
+* 🎙️ **Real-Time Voice AI:** Low-latency bidirectional voice conversation with Gemini Live (`gemini-3.1-flash-live-preview`).
+* 📄 **Multi-Format Support:** Ingestion for `.pdf`, `.docx`, `.pptx`, `.txt`, `.png`, `.jpg`, `.jpeg`.
+* 🔍 **Hybrid Vector Search:**
+  * Dense semantic embeddings (`BAAI/bge-small-en-v1.5`)
+  * Sparse BM25 lexical search (`Qdrant/bm25`)
+  * Reciprocal Rank Fusion (RRF) & Cross-Encoder Reranking (`ms-marco-MiniLM-L-6-v2`)
+* 🖼️ **Multi-Tier Hybrid OCR Engine:**
+  * **Tier 1:** Parallel Cloud Gemini 3.6 Flash
+  * **Tier 2:** Tesseract Fast CPU OCR with quality heuristic router
+  * **Tier 3:** PaddleOCR Heavy CPU fallback with thread locking
+* 💾 **Local Vector Storage:** Qdrant embedded database (no external vector database service required).
+* 🌐 **Modern UI:** Built-in web dashboard featuring real-time audio visualizers, document viewer links, and document deletion.
 
-The application unifies document ingestion, hybrid search, and live voice AI into a single seamless pipeline:
+---
 
-### 1. Document Ingestion
-When you upload a file, the backend instantly parses the text (using `PyMuPDF` or `python-docx`). If it encounters images or scanned pages, it leverages the **Gemini API for Multimodal OCR**. The extracted text is then chunked via a dynamic sliding-window, embedded, and stored locally in **Qdrant**.
+## How It Works
 
-### 2. Live Voice Interaction
-Clicking "Start Conversation" opens a direct **WebSocket (WSS)** connection between the browser and the **Gemini Multimodal Live API**. Your voice audio is streamed in real-time, bypassing traditional STT/TTS delays for instant, natural conversations.
-
-### 3. Tool-Triggered RAG
-During the conversation, if Gemini needs factual context, it triggers a `search_documents` function call over the socket. The backend intercepts this, runs a **Hybrid Search** (Dense + BM25 Sparse + RRF Fusion) across the Qdrant database, passes the top results through a **Cross-Encoder Reranker**, and streams the precise context back into the Gemini Live session so the AI can answer your query out loud!
-
-## Setup
-
-1. **Clone the project**
-```bash
-git clone <repository-url>
-cd V-RAG/backend
+```
+Document Upload ──► PyMuPDF / docx Parser ──► Text Found? ──► YES ──► Qdrant Indexing
+                                                   │
+                                                  NO
+                                                   ▼
+                                         Multi-Tier OCR Cascade
+                                      ┌─────────────────────────┐
+                                      │  Gemini 3.6 Flash (1st) │
+                                      └────────────┬────────────┘
+                                                   │ (Failed/Quota)
+                                                   ▼
+                                      ┌─────────────────────────┐
+                                      │   Tesseract OCR (2nd)   │
+                                      └────────────┬────────────┘
+                                                   │ (Low Quality)
+                                                   ▼
+                                      ┌─────────────────────────┐
+                                      │    PaddleOCR (3rd)      │
+                                      └─────────────────────────┘
 ```
 
-2. **Create and activate the virtual environment**
+1. **Document Ingestion & Chunking:** Native text is parsed instantly. Embedded images or scanned pages are routed through the 3-tier OCR cascade. Text is then semantically chunked and indexed into Qdrant.
+2. **Real-time Live Audio:** Clicking "Start Conversation" opens a WebSocket to the Gemini Multimodal Live API (`gemini-3.1-flash-live-preview`). Microphone PCM16 audio is streamed in real-time.
+3. **Tool-Triggered RAG:** When queried about document contents, Gemini calls the `search_documents` function. The backend performs a Hybrid Search across Qdrant, reranks the hits, and feeds the context back into the live voice stream so the assistant can answer out loud.
 
-*Windows:*
+---
+
+## Setup & Installation
+
+### 1. Clone the repository
+```bash
+git clone <repository-url>
+cd V-RAG
+```
+
+### 2. Create and activate a Python 3.11 Virtual Environment
+
+*Windows (PowerShell):*
 ```powershell
-python -m venv venv
+python3.11 -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
 *Linux / macOS:*
 ```bash
-python3 -m venv venv
+python3.11 -m venv venv
 source venv/bin/activate
 ```
 
-3. **Install dependencies**
+### 3. Install Dependencies
 ```bash
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
-> The project uses FastAPI, Uvicorn, Qdrant, FastEmbed, Sentence Transformers, Google GenAI, and document-processing libraries.
 
-4. **Configure Gemini**
-Create a `.env` file in the `backend` directory:
-```bash
-GEMINI_API_KEY=your_gemini_api_key
+### 4. Configure Environment Variables
+Create a `.env` file in the project root:
+```env
+GEMINI_API_KEY=AIzaSy...
 ```
-> The backend uses this key for Gemini Live and Gemini-powered OCR.
+*(Get a free API key from [Google AI Studio](https://aistudio.google.com/app/apikey))*
 
-5. **Start the server**
+### 5. Start the Application
 ```bash
+cd backend
 python server.py
 ```
-> Then open your browser and navigate to: http://localhost:8000
+Open your browser and navigate to: **`http://localhost:8000`**
 
-## Purpose
+---
 
-Built as a prototype for a **Voice-Enabled RAG system**, combining speech processing, information retrieval, and generative AI into a single seamless application.
+## Project Structure
+
+```
+V-RAG/
+├── backend/
+│   ├── server.py             # FastAPI server & WebSocket live voice router
+│   ├── rag_pipeline.py       # Hybrid Qdrant retriever & cross-encoder reranker
+│   ├── requirements.txt      # Python 3.11 dependency list
+│   └── uploads/              # Local storage for uploaded document files
+├── frontend/
+│   ├── index.html            # Web dashboard & audio controls
+│   └── original-*.mp4        # Interactive visual orb video
+└── .env                      # API keys configuration
+```

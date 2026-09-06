@@ -1,22 +1,21 @@
 import os
-from dotenv import load_dotenv
-load_dotenv()
+import uuid
 import time
 import requests
+import nltk
+from dotenv import load_dotenv
 from qdrant_client import QdrantClient, models
-from qdrant_client.models import PointStruct
+from qdrant_client.models import PointStruct, VectorParams, Distance, SparseVectorParams, SparseIndexParams, SparseVector
 from fastembed import TextEmbedding, SparseTextEmbedding
 from sentence_transformers import CrossEncoder
-from tenacity import retry, stop_after_attempt, wait_exponential
+
+load_dotenv()
 
 class RAGPipeline:
     def __init__(self, qdrant_path="./qdrant_data", collection_name="msmarco_hybrid"):
-        print("Initializing RAG Pipeline components...")
         self.client = QdrantClient(path=qdrant_path)
         self.collection_name = collection_name
         
-        # Ensure collection exists
-        from qdrant_client.models import VectorParams, Distance, SparseVectorParams, SparseIndexParams
         if not self.client.collection_exists(self.collection_name):
             self.client.create_collection(
                 collection_name=self.collection_name,
@@ -24,16 +23,11 @@ class RAGPipeline:
                 sparse_vectors_config={"sparse": SparseVectorParams(index=SparseIndexParams(on_disk=False))}
             )
         
-        # Load embedding models for query
         self.dense_model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
         self.sparse_model = SparseTextEmbedding(model_name="Qdrant/bm25")
-        
-        # Load Reranker
-        print("Loading reranker...")
         self.reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', max_length=512)
 
     def retrieve(self, query, top_k=20):
-        # Generate query embeddings (Dense + Sparse)
         dense_vec = list(self.dense_model.embed([query]))[0].tolist()
         sparse_embed = list(self.sparse_model.embed([query]))[0]
         sparse_vec = models.SparseVector(
@@ -41,7 +35,6 @@ class RAGPipeline:
             values=sparse_embed.values.tolist()
         )
         
-        # Hybrid Search using Prefetch and RRF Fusion
         prefetch = [
             models.Prefetch(
                 query=dense_vec,
@@ -61,11 +54,9 @@ class RAGPipeline:
             query=models.FusionQuery(fusion=models.Fusion.RRF),
             limit=top_k
         )
-        hybrid_hits = query_res.points
         
-        # Combine unique documents by metadata doc_id
         unique_docs = {}
-        for hit in hybrid_hits:
+        for hit in query_res.points:
             doc_id = hit.payload.get('doc_id', hit.id)
             if doc_id not in unique_docs:
                 unique_docs[doc_id] = hit.payload['text']
@@ -78,18 +69,11 @@ class RAGPipeline:
             
         pairs = [[query, doc] for doc in documents]
         scores = self.reranker.predict(pairs)
-        
-        # Sort documents by score
         doc_score_pairs = list(zip(documents, scores))
         doc_score_pairs.sort(key=lambda x: x[1], reverse=True)
-        
         return [doc for doc, score in doc_score_pairs[:top_n]]
 
     def add_document(self, text: str, doc_id: str, title: str = ""):
-        import uuid
-        import nltk
-        from qdrant_client.models import PointStruct, SparseVector
-        
         try:
             nltk.data.find('tokenizers/punkt')
         except LookupError:
@@ -98,7 +82,6 @@ class RAGPipeline:
             
         chunks = []
         
-        # 1. Semantic Chunking
         sentences = nltk.sent_tokenize(text)
         current_chunk = []
         current_length = 0
@@ -116,7 +99,6 @@ class RAGPipeline:
         if current_chunk:
             chunks.append(" ".join(current_chunk))
             
-        # 2. Sliding Window Chunking
         words = text.split()
         window_size = 150
         overlap = 30
@@ -130,7 +112,6 @@ class RAGPipeline:
                 chunks.append(chunk)
                 i += (window_size - overlap)
                 
-        # Deduplicate and clean
         chunks = list(set([c.strip() for c in chunks if c.strip()]))
                 
         dense_embeds = list(self.dense_model.embed(chunks))
@@ -162,7 +143,6 @@ class RAGPipeline:
             collection_name=self.collection_name,
             points=points
         )
-        print(f"Indexed document {doc_id} with {len(chunks)} chunks.")
 
     def get_all_documents(self):
         try:
@@ -179,12 +159,10 @@ class RAGPipeline:
                 if doc_id and doc_id not in docs:
                     docs[doc_id] = title
             return [{"doc_id": k, "title": v} for k, v in docs.items()]
-        except Exception as e:
-            print(f"Error fetching documents: {e}")
+        except Exception:
             return []
 
     def delete_document(self, doc_id: str):
-        from qdrant_client.http import models
         try:
             self.client.delete(
                 collection_name=self.collection_name,
@@ -199,7 +177,5 @@ class RAGPipeline:
                     )
                 )
             )
-            print(f"Deleted document {doc_id} from Qdrant.")
         except Exception as e:
-            print(f"Error deleting document {doc_id}: {e}")
             raise e
