@@ -234,6 +234,9 @@ def extract_pptx_text(file_bytes: bytes) -> str:
 
 @app.post("/api/upload")
 async def upload_doc(file: UploadFile = File(...)):
+    if not rag:
+        return {"status": "error", "message": "RAG pipeline is not initialized or model is still loading"}
+
     content = await file.read()
     filename = file.filename.lower()
     
@@ -251,18 +254,21 @@ async def upload_doc(file: UploadFile = File(...)):
         else:
             text = content.decode("utf-8", errors="ignore")
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": f"Document extraction failed: {str(e)}"}
 
-    doc_id = str(uuid.uuid4())
-    rag.add_document(text, doc_id, file.filename)
-    
-    ext = os.path.splitext(file.filename)[1]
-    safe_filename = f"{doc_id}{ext}"
-    file_path = os.path.join(UPLOADS_DIR, safe_filename)
-    with open(file_path, "wb") as f:
-        f.write(content)
+    try:
+        doc_id = str(uuid.uuid4())
+        rag.add_document(text, doc_id, file.filename)
         
-    return {"status": "success", "doc_id": doc_id, "title": file.filename, "url": f"/uploads/{safe_filename}"}
+        ext = os.path.splitext(file.filename)[1]
+        safe_filename = f"{doc_id}{ext}"
+        file_path = os.path.join(UPLOADS_DIR, safe_filename)
+        with open(file_path, "wb") as f:
+            f.write(content)
+            
+        return {"status": "success", "doc_id": doc_id, "title": file.filename, "url": f"/uploads/{safe_filename}"}
+    except Exception as e:
+        return {"status": "error", "message": f"Vector indexing failed: {str(e)}"}
 
 @app.get("/api/documents")
 async def get_documents():

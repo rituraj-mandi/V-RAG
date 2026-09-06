@@ -250,10 +250,19 @@
             method: 'POST',
             body: formData
           });
-          const data = await res.json();
+          const textResp = await res.text();
+          let data;
+          try {
+            data = JSON.parse(textResp);
+          } catch (err) {
+            throw new Error(textResp.substring(0, 100));
+          }
+          
           if (data.status === 'success') {
             appendDocItem(data);
             statusText.textContent = `Uploaded ${file.name}`;
+          } else {
+            statusText.textContent = `Upload failed: ${data.message || 'Unknown error'}`;
           }
         } catch (e) {
           statusText.textContent = `Upload failed: ${e.message}`;
